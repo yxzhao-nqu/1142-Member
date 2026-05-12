@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 
-const API_BASE_URL = 'https://one142-member.onrender.com/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
