@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 
 // 中間件
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite 開發服務器
+  origin: 'https://one142-member-frontend.onrender.com', // Vite 開發服務器
   credentials: true
 }));
 app.use(express.json());
