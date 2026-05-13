@@ -1,4 +1,4 @@
-import { db } from './init';
+import { pool } from './init';
 
 export interface Member {
   id: number;
@@ -13,149 +13,99 @@ export interface Member {
 
 export class MemberService {
   // 新增會員
-  static createMember(
+  static async createMember(
     name: string,
     password: string,
     phone: string,
     age?: number,
     address?: string
   ): Promise<Member> {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `INSERT INTO members (name, password, phone, age, address)
-        VALUES (?, ?, ?, ?, ?)`,
-        [name, password, phone, age || null, address || null],
-        function (err) {
-          if (err) return reject(err);
+    const result = await pool.query(
+      `INSERT INTO members (name, password, phone, age, address)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [name, password, phone, age ?? null, address ?? null]
+    );
 
-          db.get('SELECT * FROM members WHERE id = ?', [this.lastID], (err, member: Member) => {
-            if (err) reject(err);
-            else resolve(member);
-          });
-        }
-      );
-    });
+    return result.rows[0];
   }
 
   // 獲取所有會員
-  static getAllMembers(): Promise<Member[]> {
-    return new Promise((resolve, reject) => {
-      db.all('SELECT * FROM members ORDER BY created_at DESC', (err, members: Member[]) => {
-        if (err) reject(err);
-        else resolve(members || []);
-      });
-    });
+  static async getAllMembers(): Promise<Member[]> {
+    const result = await pool.query('SELECT * FROM members ORDER BY created_at DESC');
+    return result.rows;
   }
 
   // 獲取單個會員
-  static getMemberById(id: number): Promise<Member | undefined> {
-    return new Promise((resolve, reject) => {
-      db.get('SELECT * FROM members WHERE id = ?', [id], (err, member: Member | undefined) => {
-        if (err) reject(err);
-        else resolve(member);
-      });
-    });
+  static async getMemberById(id: number): Promise<Member | undefined> {
+    const result = await pool.query('SELECT * FROM members WHERE id = $1', [id]);
+    return result.rows[0];
   }
 
   // 獲取會員（通過用戶名 - 用於登入）
-  static getMemberByName(name: string): Promise<Member | undefined> {
-    return new Promise((resolve, reject) => {
-      db.get('SELECT * FROM members WHERE name = ?', [name], (err, member: Member | undefined) => {
-        if (err) reject(err);
-        else resolve(member);
-      });
-    });
+  static async getMemberByName(name: string): Promise<Member | undefined> {
+    const result = await pool.query('SELECT * FROM members WHERE name = $1', [name]);
+    return result.rows[0];
   }
 
   // 更新會員
-  static updateMember(
+  static async updateMember(
     id: number,
     name: string,
     phone: string,
     age?: number,
     address?: string
   ): Promise<Member | null> {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE members 
-        SET name = ?, phone = ?, age = ?, address = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-        [name, phone, age || null, address || null, id],
-        function (err) {
-          if (err) return reject(err);
+    const result = await pool.query(
+      `UPDATE members
+       SET name = $1,
+           phone = $2,
+           age = $3,
+           address = $4,
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [name, phone, age ?? null, address ?? null, id]
+    );
 
-          if (this.changes === 0) {
-            resolve(null);
-          } else {
-            db.get('SELECT * FROM members WHERE id = ?', [id], (err, member: Member) => {
-              if (err) reject(err);
-              else resolve(member);
-            });
-          }
-        }
-      );
-    });
+    return result.rows[0] ?? null;
   }
 
   // 刪除會員
-  static deleteMember(id: number): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      db.run('DELETE FROM members WHERE id = ?', [id], function (err) {
-        if (err) reject(err);
-        else resolve(this.changes > 0);
-      });
-    });
+  static async deleteMember(id: number): Promise<boolean> {
+    const result = await pool.query('DELETE FROM members WHERE id = $1', [id]);
+    return (result.rowCount ?? 0) > 0;
   }
 }
 
 export class SessionService {
   // 創建 session
-  static createSession(sessionId: string, memberId: number, expiresAt: Date): Promise<void> {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `INSERT INTO sessions (id, member_id, expires_at)
-        VALUES (?, ?, ?)`,
-        [sessionId, memberId, expiresAt.toISOString()],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+  static async createSession(sessionId: string, memberId: number, expiresAt: Date): Promise<void> {
+    await pool.query(
+      `INSERT INTO sessions (id, member_id, expires_at)
+       VALUES ($1, $2, $3)`,
+      [sessionId, memberId, expiresAt.toISOString()]
+    );
   }
 
   // 獲取 session
-  static getSession(sessionId: string): Promise<{ member_id: number; expires_at: string } | undefined> {
-    return new Promise((resolve, reject) => {
-      db.get(
-        'SELECT member_id, expires_at FROM sessions WHERE id = ?',
-        [sessionId],
-        (err, row: { member_id: number; expires_at: string } | undefined) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+  static async getSession(sessionId: string): Promise<{ member_id: number; expires_at: string } | undefined> {
+    const result = await pool.query(
+      'SELECT member_id, expires_at FROM sessions WHERE id = $1',
+      [sessionId]
+    );
+    return result.rows[0];
   }
 
   // 刪除 session
-  static deleteSession(sessionId: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      db.run('DELETE FROM sessions WHERE id = ?', [sessionId], function (err) {
-        if (err) reject(err);
-        else resolve(this.changes > 0);
-      });
-    });
+  static async deleteSession(sessionId: string): Promise<boolean> {
+    const result = await pool.query('DELETE FROM sessions WHERE id = $1', [sessionId]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   // 清理過期 session
-  static cleanupExpiredSessions(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      db.run('DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP', (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+  static async cleanupExpiredSessions(): Promise<void> {
+    await pool.query('DELETE FROM sessions WHERE expires_at < NOW()');
   }
 }
 

@@ -45,7 +45,8 @@ Member/
 - Node.js
 - Express
 - TypeScript
-- SQLite3
+- PostgreSQL
+- pg
 - bcryptjs (密碼加密)
 - cookie-parser
 
@@ -66,10 +67,32 @@ yarn dev
 ```bash
 cd backend
 yarn install
+cp .env.example .env
+# 編輯 .env 設定 PostgreSQL 連線資訊
+# PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+
 yarn dev
 ```
 
 後端服務器地址：`http://localhost:3001`
+
+## PostgreSQL 連線設定
+
+將 `backend/.env.example` 複製為 `backend/.env`，並填入本地 PostgreSQL 連線資訊：
+
+```env
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=postgres
+PGDATABASE=memberdb
+```
+
+如果你的 PostgreSQL 資料庫尚未建立，請先建立 `memberdb`：
+
+```sql
+CREATE DATABASE memberdb;
+```
 
 ## 功能特性
 
@@ -131,14 +154,14 @@ yarn dev
 ### Members 表
 ```sql
 CREATE TABLE members (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
   phone TEXT NOT NULL,
   age INTEGER,
   address TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -146,10 +169,9 @@ CREATE TABLE members (
 ```sql
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
-  member_id INTEGER NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  expires_at DATETIME,
-  FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
 );
 ```
 
@@ -167,8 +189,8 @@ CREATE TABLE sessions (
 
 ## 常見問題
 
-### SQLite3 編譯錯誤
-如果遇到 SQLite3 原生模塊編譯錯誤，確保已安裝 Python 和 Visual C++ 編譯工具。
+### PostgreSQL 連線錯誤
+如果遇到 PostgreSQL 連線失敗，請確認 `.env` 中的 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PGDATABASE` 是否正確，並且 PostgreSQL 服務已啟動。
 
 ### CORS 錯誤
 前端默認連接 `http://localhost:3001` 後端，確保後端正常運行。

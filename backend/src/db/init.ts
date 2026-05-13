@@ -1,99 +1,69 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
 import bcryptjs from 'bcryptjs';
+import { Pool, PoolClient } from 'pg';
 
-const dbPath = path.join(__dirname, '../../db/database.db');
-
-export const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Database connection error:', err.message);
-  } else {
-    console.log('Connected to SQLite database');
-  }
+export const pool = new Pool({
+  host: process.env.PGHOST || 'localhost',
+  port: Number(process.env.PGPORT) || 5432,
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: process.env.PGDATABASE || 'memberdb'
 });
 
 export async function initializeDatabase() {
-  return new Promise<void>((resolve, reject) => {
-    // 啟用外鍵
-    db.run('PRAGMA foreign_keys = ON', (err) => {
-      if (err) return reject(err);
+  const client = await pool.connect();
 
-      // 創建 members 表
-      db.run(
-        `CREATE TABLE IF NOT EXISTS members (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          password TEXT NOT NULL,
-          phone TEXT NOT NULL,
-          age INTEGER,
-          address TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`,
-        (err) => {
-          if (err) return reject(err);
+  try {
+    await client.query('BEGIN');
 
-          // 創建 sessions 表
-          db.run(
-            `CREATE TABLE IF NOT EXISTS sessions (
-              id TEXT PRIMARY KEY,
-              member_id INTEGER NOT NULL,
-              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-              expires_at DATETIME,
-              FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
-            )`,
-            async (err) => {
-              if (err) return reject(err);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS members (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        age INTEGER,
+        address TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
 
-              try {
-                // 檢查是否已有預設會員，如果沒有則創建
-                await createDefaultMember();
-                console.log('Database initialized successfully');
-                resolve();
-              } catch (error) {
-                reject(error);
-              }
-            }
-          );
-        }
-      );
-    });
-  });
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE
+      )
+    `);
+
+    await createDefaultMember(client);
+    await client.query('COMMIT');
+    console.log('Database initialized successfully');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Failed to initialize database:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
-// 創建預設會員
-async function createDefaultMember() {
-  return new Promise<void>((resolve, reject) => {
-    // 檢查 admin 會員是否已存在
-    db.get('SELECT id FROM members WHERE name = ?', ['admin'], async (err, row) => {
-      if (err) return reject(err);
+async function createDefaultMember(client: PoolClient) {
+  const result = await client.query('SELECT id FROM members WHERE name = $1', ['admin']);
 
-      if (row) {
-        // admin 會員已存在
-        console.log('Default admin member already exists');
-        resolve();
-        return;
-      }
+  if ((result.rowCount ?? 0) > 0) {
+    console.log('Default admin member already exists');
+    return;
+  }
 
-      try {
-        // 加密密碼
-        const hashedPassword = await bcryptjs.hash('123456', 10);
+  const hashedPassword = await bcryptjs.hash('123456', 10);
+  await client.query(
+    `INSERT INTO members (name, password, phone, age, address)
+     VALUES ($1, $2, $3, $4, $5)`,
+    ['admin', hashedPassword, '09123456789', 30, '台北市']
+  );
 
-        // 插入預設會員
-        db.run(
-          `INSERT INTO members (name, password, phone, age, address)
-          VALUES (?, ?, ?, ?, ?)`,
-          ['admin', hashedPassword, '09123456789', 30, '台北市'],
-          function (err) {
-            if (err) return reject(err);
-            console.log('Default admin member created successfully');
-            resolve();
-          }
-        );
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  console.log('Default admin member created successfully');
 }
 
