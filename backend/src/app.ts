@@ -10,8 +10,18 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // 中間件
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: 'https://one142-member-frontend.onrender.com', // Vite 開發服務器
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
