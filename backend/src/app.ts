@@ -7,11 +7,11 @@ import authRoutes from './routes/auth';
 import memberRoutes from './routes/members';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 
 // 中間件
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173'
+  process.env.FRONTEND_URL,
 ];
 
 app.use(cors({
