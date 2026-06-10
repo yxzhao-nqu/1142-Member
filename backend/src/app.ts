@@ -7,16 +7,20 @@ import authRoutes from './routes/auth';
 import memberRoutes from './routes/members';
 
 const app = express();
-const PORT = process.env.PORT;
 
-// 中間件
+// Render automatically populates process.env.PORT (default is 10000)
+const PORT = process.env.PORT || 3001;
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL, // Your Render Frontend
+  'http://localhost:5173', // Custom Domain
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -40,7 +44,7 @@ initializeDatabase().then(() => {
 
   // 啟動服務器
   app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
   });
 }).catch((err) => {
   console.error('Failed to initialize database:', err);
